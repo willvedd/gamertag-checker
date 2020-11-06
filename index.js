@@ -6,7 +6,6 @@ dotenv.config();
 const inputFilePath = `${__dirname}/input.txt`;
 const outputFilePath = `${__dirname}/output.txt`;
 
-const retryableGamertags = [];
 const sleepDelay = 2500;
 
 const authToken = process.env["AUTH_TOKEN"];
@@ -51,14 +50,9 @@ const checkGamertagForLegitimacy = async (gamertag) => {
         );
         return retryableGamertags.push(gamertag);
       }
-      // Error with appropriate description
-      if (data.description !== undefined) {
-        console.log(`Error checking ${gamertag}: ${data.description}`);
-        retryableGamertags.push(gamertag);
-        return;
-      }
+
       // Some other error
-      console.log(`Error checking ${gamertag}: ${data}`);
+      console.log(`Error checking ${gamertag}: ${!!data.description ? data.description : data}`);
       retryableGamertags.push(gamertag);
     });
 };
@@ -67,10 +61,7 @@ const addToOutputFile = (message) => {
   console.log(message);
   fs.appendFileSync(outputFilePath, `\n${message}`, function (err) {
     if (err) {
-      // append failed
-      console.log("*******");
-      console.log(`Failed to append message: ${message}`, err);
-      console.log("*******");
+      console.log(`Error appending to file: ${message}`, err);
     }
   });
 };
@@ -88,7 +79,7 @@ const addToOutputFile = (message) => {
 
   if (checkThese.length === 0) {
     console.log(
-      "No gamertags to check, input a line-delimited list in input.txt"
+      `No gamertags to check, input a line-delimited list in ${inputFilePath}`
     );
     return;
   }
@@ -107,7 +98,7 @@ const addToOutputFile = (message) => {
             checkGamertagForLegitimacy(gamertag).then(() => {
               resolve();
             });
-          }, index * sleepDelay);
+          }, index * sleepDelay);//To spread out requests to mitigate rate-limiting
         } catch (err) {
           reject(err);
         }
@@ -119,6 +110,7 @@ const addToOutputFile = (message) => {
     console.log("Note: Need to retry the following", retryableGamertags);
   }
 
+  //Push the retryable gamertags back into the input file for subsequent reprocessing
   await fs.writeFileSync(
     inputFilePath,
     retryableGamertags.reduce((acc, gamertag, index) => {
